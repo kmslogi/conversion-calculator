@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>단위 환산 프로그램 v4.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- 🔒 암호화 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        html.dark { color-scheme: dark; }
+        .table-input {
+            width: 100%; padding: 0.4rem 0.5rem; border: 1px solid #d1d5db;
+            border-radius: 0.375rem; transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #f9fafb;
+        }
+        .dark .table-input { background-color: #374151; border-color: #4b5563; }
+        .table-input:focus {
+            outline: none; --tw-ring-color: #2563eb;
+            box-shadow: 0 0 0 2px var(--tw-ring-color); border-color: #2563eb;
+        }
+        .result-input { border: none; background-color: transparent; font-weight: bold; padding: 0.4rem 0.5rem; width: 100%; }
+        .result-input:focus { outline: none; box-shadow: none; }
+        .result-input.success { color: #16a34a; }
+        .dark .result-input.success { color: #4ade80; }
+        .result-input.error { color: #dc2626; }
+        .dark .result-input.error { color: #f87171; }
+        .result-input.warning { color: #f59e0b; }
+        .dark .result-input.warning { color: #facc15; }
+        #conversion-table { table-layout: fixed; width: auto; min-width: 100%; }
+        .copy-checkbox { width: 1rem; height: 1rem; accent-color: #2563eb; }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .toggle-switch-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+        .toggle-switch.active .toggle-switch-slider { background-color: #16a34a; }
+        .toggle-switch.active .toggle-switch-slider:before { transform: translateX(20px); }
+        .insert-row-btn-cell {
+            position: relative;
+            width: 2rem;
+            min-width: 2rem;
+        }
+        .insert-row-btn {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 24px;
+            border-radius: 9999px;
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .conversion-row:hover .insert-row-btn {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900">
+
+    <div class="w-full max-w-fit mx-auto p-4 md:p-8">
+        
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white inline">단위 환산 프로그램</h1>
+                <span id="version-display" class="text-xs font-mono text-slate-400 ml-2">Loading...</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="guide-btn" class="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 font-medium text-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    사용방법 안내
+                </button>
+                <button id="theme-toggle" class="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-slate-800">
+                    <svg id="theme-icon-light" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <svg id="theme-icon-dark" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-screen" class="bg-white dark:bg-slate-800 p-8 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
+            <p class="text-slate-600 dark:text-slate-400">데이터베이스를 불러오는 중...</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div id="main-content" class="hidden">
+            <div class="flex flex-col sm:flex-row justify-end mb-2 gap-4">
+                <div id="area-toggle-container" class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-slate-600 dark:text-slate-400">M2, 평 환산</span>
+                    <label id="area-toggle-btn" class="toggle-switch">
+                        <span class="toggle-switch-slider"></span>
+                    </label>
+                </div>
+                <div class="flex items-center gap-2 p-2 rounded-md bg-white dark:bg-slate-800 border dark:border-slate-700">
+                    <label for="bulk-from-unit" class="text-sm font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">현재 단위</label>
+                    <input type="text" id="bulk-from-unit" list="all-units-list" class="table-input w-28" placeholder="단위 입력">
+                    <button id="bulk-apply-from-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-xs leading-tight text-center transition">일괄<br>적용</button>
+                </div>
+                <div class="flex items-center gap-2 p-2 rounded-md bg-white dark:bg-slate-800 border dark:border-slate-700">
+                    <label for="bulk-to-unit" class="text-sm font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">환산 단위</label>
+                    <input type="text" id="bulk-to-unit" list="all-units-list" class="table-input w-28" placeholder="단위 입력">
+                    <button id="bulk-apply-to-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-xs leading-tight text-center transition">일괄<br>적용</button>
+                </div>
+                <datalist id="all-units-list"></datalist>
+            </div>
+            
+            <div class="overflow-x-auto bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <table id="conversion-table" class="w-full text-sm">
+                    <thead class="text-left text-slate-500 dark:text-slate-400">
+                        <tr>
+                            <th class="w-8"></th>
+                            <th data-col="desc" class="p-2 pb-1 font-medium text-center"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="desc"><br><span>자재내역</span></div></th>
+                            <th data-col="code" class="p-2 pb-1 font-medium text-center"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="code"><br><span>자재코드</span></div></th>
+                            <th data-col="qty" class="p-2 pb-1 font-medium text-center"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="qty"><br><span>수량</span></div></th>
+                            <th data-col="from" class="p-2 pb-1 font-medium text-center"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="from"><br><span>현재 단위</span></div></th>
+                            <th data-col="arrow" class="p-2 pb-3 font-medium text-center initial-hidden hidden align-bottom">→</th>
+                            <th data-col="result" class="p-2 pb-1 font-medium text-center initial-hidden hidden"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="result"><br><span>결과</span></div></th>
+                            <th data-col="to" class="p-2 pb-1 font-medium text-center"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="to"><br><span>변환할 단위</span></div></th>
+                            <th data-col="m2" class="p-2 pb-1 font-medium text-center area-column hidden"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="m2"><br><span>M2</span></div></th>
+                            <th data-col="py" class="p-2 pb-1 font-medium text-center area-column hidden"><div class="flex flex-col items-center"><input type="checkbox" class="copy-checkbox mb-1" data-col="py"><br><span>평(Pyeong)</span></div></th>
+                            <th class="w-12 p-2 pb-3 font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="conversion-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="error-area" class="mt-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg hidden">
+            <p id="error-text" class="text-sm font-medium text-red-600 dark:text-red-400"></p>
+        </div>
+    </div>
+    
+    <!-- Floating Action Buttons -->
+    <div id="action-buttons-container" class="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3 hidden">
+        <button id="copy-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-slate-800 transition shadow-lg">선택 열 복사</button>
+        <button id="convert-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-slate-800 transition shadow-lg">일괄 환산하기</button>
+    </div>
+    
+    <button id="add-row-btn" class="fixed bottom-8 left-8 z-50 flex items-center justify-center gap-1 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold py-2 px-4 rounded-lg transition shadow-lg hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+        행 추가
+    </button>
+    
+    <!-- Toast Message -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white py-2 px-4 rounded-lg shadow-lg transition-opacity opacity-0 pointer-events-none">
+        복사되었습니다!
+    </div>
+
+    <!-- Guide Overlay -->
+    <div id="guide-overlay" class="fixed inset-0 z-[100] hidden">
+        <div id="guide-highlight" class="absolute border-4 border-blue-500 rounded-lg pointer-events-none transition-all duration-300 bg-transparent" style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);"></div>
+
+        <div id="guide-tooltip" class="absolute bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-5 max-w-sm z-[101] transition-all duration-300">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded">STEP <span id="guide-step-num">1</span></span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400" id="guide-progress">1/10</span>
+                </div>
+                <button id="guide-close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <h3 id="guide-title" class="text-lg font-bold text-slate-800 dark:text-white mb-2">제목</h3>
+            <p id="guide-description" class="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">설명</p>
+
+            <div class="flex items-center justify-between">
+                <button id="guide-skip" class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">건너뛰기</button>
+                <div class="flex gap-2">
+                    <button id="guide-prev" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">이전</button>
+                    <button id="guide-next" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium">다음</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== 전역 변수 =====
+        let materialsMap = new Map();
+        let rowCounter = 0;
+        let isFirstConversion = true;
+        let dbAllUnits = [];
+
+        // ===== 가이드 데이터 =====
+        let currentGuideStep = 0;
+        const guideSteps = [
+            {
+                target: '#add-row-btn',
+                title: '행 추가 버튼',
+                description: '새로운 환산 항목을 추가하려면 이 버튼을 클릭하세요. 엔터키를 눌러도 새 행이 추가됩니다.',
+                position: 'top'
+            },
+            {
+                target: '.material-code',
+                title: '자재코드 입력',
+                description: '환산할 자재의 코드를 입력하세요. 코드를 입력하면 자재명과 사용 가능한 단위가 자동으로 표시됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '.quantity',
+                title: '수량 입력',
+                description: '환산할 수량을 숫자로 입력하세요. 소수점도 사용 가능합니다.',
+                position: 'bottom'
+            },
+            {
+                target: '.from-unit',
+                title: '현재 단위',
+                description: '현재 자재의 단위를 선택하세요. 입력 시 자동완성 목록이 표시됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '.to-unit',
+                title: '변환할 단위',
+                description: '환산하려는 목표 단위를 선택하세요. 자동완성에서 선택하거나 직접 입력할 수 있습니다.',
+                position: 'bottom'
+            },
+            {
+                target: '#bulk-from-unit',
+                title: '현재 단위 일괄 적용',
+                description: '단위를 입력하고 일괄 적용 버튼을 누르면 모든 행의 현재 단위가 한 번에 변경됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '#bulk-to-unit',
+                title: '환산 단위 일괄 적용',
+                description: '단위를 입력하고 일괄 적용 버튼을 누르면 모든 행의 변환 단위가 한 번에 변경됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '#area-toggle-btn',
+                title: 'M2, 평 환산 토글',
+                description: '이 스위치를 켜면 면적 단위(M2, 평) 환산 컬럼이 추가로 표시됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '#convert-btn',
+                title: '일괄 환산하기',
+                description: '입력한 모든 항목을 한 번에 환산합니다. 결과는 테이블에 표시됩니다.',
+                position: 'top'
+            },
+            {
+                target: '.copy-checkbox',
+                title: '열 선택 복사',
+                description: '복사하고 싶은 열의 체크박스를 선택한 후 "선택 열 복사" 버튼을 누르면 해당 열의 데이터가 클립보드에 복사됩니다.',
+                position: 'bottom'
+            },
+            {
+                target: '#copy-btn',
+                title: '선택 열 복사',
+                description: '체크한 열들의 데이터를 엑셀에 붙여넣기 가능한 형식으로 복사합니다.',
+                position: 'top'
+            }
+        ];
+
+        // ===== DOM 요소 참조 =====
+        const elements = {
+            'loading-screen': document.getElementById('loading-screen'),
+            'main-content': document.getElementById('main-content'),
+            'version-display': document.getElementById('version-display'),
+            'conversion-tbody': document.getElementById('conversion-tbody'),
+            'add-row-btn': document.getElementById('add-row-btn'),
+            'convert-btn': document.getElementById('convert-btn'),
+            'copy-btn': document.getElementById('copy-btn'),
+            'area-toggle-btn': document.getElementById('area-toggle-btn'),
+            'bulk-from-unit': document.getElementById('bulk-from-unit'),
+            'bulk-apply-from-btn': document.getElementById('bulk-apply-from-btn'),
+            'bulk-to-unit': document.getElementById('bulk-to-unit'),
+            'bulk-apply-to-btn': document.getElementById('bulk-apply-to-btn'),
+            'all-units-list': document.getElementById('all-units-list'),
+            'error-area': document.getElementById('error-area'),
+            'error-text': document.getElementById('error-text'),
+            'theme-toggle': document.getElementById('theme-toggle'),
+            'theme-icon-light': document.getElementById('theme-icon-light'),
+            'theme-icon-dark': document.getElementById('theme-icon-dark'),
+            'toast': document.getElementById('toast'),
+            'action-buttons-container': document.getElementById('action-buttons-container'),
+            'guide-btn': document.getElementById('guide-btn'),
+            'guide-overlay': document.getElementById('guide-overlay'),
+            'guide-highlight': document.getElementById('guide-highlight'),
+            'guide-tooltip': document.getElementById('guide-tooltip'),
+            'guide-title': document.getElementById('guide-title'),
+            'guide-description': document.getElementById('guide-description'),
+            'guide-step-num': document.getElementById('guide-step-num'),
+            'guide-progress': document.getElementById('guide-progress'),
+            'guide-prev': document.getElementById('guide-prev'),
+            'guide-next': document.getElementById('guide-next'),
+            'guide-skip': document.getElementById('guide-skip'),
+            'guide-close': document.getElementById('guide-close')
+        };
+
+        // ===== 유틸리티 함수 =====
+        const showError = (message) => { 
+            elements['error-text'].textContent = message; 
+            elements['error-area'].classList.remove('hidden'); 
+        };
+        const hideError = () => { elements['error-area'].classList.add('hidden'); };
+        const showToast = (message) => { 
+            elements['toast'].textContent = message; 
+            elements['toast'].classList.remove('opacity-0'); 
+            setTimeout(() => { elements['toast'].classList.add('opacity-0'); }, 2000); 
+        };
+
+        // ===== 데이터베이스 로드 =====
+        // ===== 데이터베이스 로드 (암호화 버전) =====
+        async function loadDatabase() {
+            try {
+                console.log('📦 데이터베이스 로딩 시작...');
+                
+                // 🔒 암호화된 데이터 로드
+                const response = await fetch('./data/encrypted-materials.js');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: 파일을 찾을 수 없습니다`);
+                }
+                
+                // JS 파일 내용 로드
+                const jsContent = await response.text();
+                
+                // encryptedMaterialsData 변수 추출
+                const match = jsContent.match(/const encryptedMaterialsData = "(.+)";/);
+                if (!match) {
+                    throw new Error('암호화된 데이터를 찾을 수 없습니다');
+                }
+                const encryptedData = match[1];
+                
+                // 🔑 비밀번호 입력 받기
+                let password = sessionStorage.getItem('materials_password');
+                
+                if (!password) {
+                    password = prompt('🔒 데이터베이스 비밀번호를 입력하세요:');
+                    
+                    if (!password) {
+                        throw new Error('비밀번호가 필요합니다');
+                    }
+                }
+                
+                // 복호화 시도
+                let decryptedData;
+                try {
+                    const decrypted = CryptoJS.AES.decrypt(encryptedData, password);
+                    const jsonString = decrypted.toString(CryptoJS.enc.Utf8);
+                    
+                    if (!jsonString) {
+                        sessionStorage.removeItem('materials_password');
+                        throw new Error('비밀번호가 틀렸습니다');
+                    }
+                    
+                    decryptedData = JSON.parse(jsonString);
+                    
+                    // 비밀번호 저장 (세션 동안만)
+                    sessionStorage.setItem('materials_password', password);
+                    
+                } catch (decryptError) {
+                    sessionStorage.removeItem('materials_password');
+                    throw new Error('비밀번호가 틀렸거나 데이터가 손상되었습니다');
+                }
+                
+                // Map으로 변환
+                const allUnits = new Set();
+                decryptedData.forEach(material => {
+                    const upperCaseCode = material.code.toUpperCase();
+                    const upperCaseUnits = {};
+                    Object.keys(material.units).forEach(unitKey => {
+                        const upperUnit = unitKey.toUpperCase();
+                        upperCaseUnits[upperUnit] = material.units[unitKey];
+                        allUnits.add(upperUnit);
+                    });
+                    materialsMap.set(upperCaseCode, { ...material, units: upperCaseUnits });
+                });
+                
+                allUnits.add('PYEONG');
+                elements['all-units-list'].innerHTML = Array.from(allUnits).sort().map(u => `<option value="${u}">`).join('');
+                
+                console.log(`✅ 데이터베이스 로드 완료: ${decryptedData.length}개 자재`);
+                
+                // UI 업데이트
+                elements['loading-screen'].classList.add('hidden');
+                elements['main-content'].classList.remove('hidden');
+                elements['action-buttons-container'].classList.remove('hidden');
+                elements['add-row-btn'].classList.remove('hidden');
+                elements['version-display'].textContent = `v4.0 (2025-10-20)`;
+                
+                // 초기 행 추가
+                createRow();
+                
+            } catch (error) {
+                console.error('❌ 데이터베이스 로드 실패:', error);
+                elements['loading-screen'].innerHTML = `
+                    <div class="text-red-600 dark:text-red-400">
+                        <p class="font-bold mb-2 text-lg">⚠️ ${error.message}</p>
+                        <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            🔄 다시 시도
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // ===== 행 생성 =====
+        function createRow(insertAfterElement = null) {
+            rowCounter++;
+            const tr = document.createElement('tr');
+            tr.className = 'conversion-row';
+            const resultColsHiddenClass = isFirstConversion ? 'initial-hidden hidden' : '';
+            const areaColsHiddenClass = elements['area-toggle-btn'].classList.contains('active') ? '' : 'hidden';
+
+            tr.innerHTML = `
+                <td class="insert-row-btn-cell"><button class="insert-row-btn">+</button></td>
+                <td data-col="desc" class="p-1"><input type="text" class="result-input" readonly></td>
+                <td data-col="code" class="p-1"><input type="text" class="table-input material-code" placeholder="자재코드"></td>
+                <td data-col="qty" class="p-1"><input type="text" class="table-input quantity" placeholder="수량" inputmode="decimal"></td>
+                <td data-col="from" class="p-1"><input type="text" class="table-input from-unit" list="from-unit-list-${rowCounter}" placeholder="현재 단위"></td>
+                <td data-col="arrow" class="p-1 ${resultColsHiddenClass} text-center text-slate-400 dark:text-slate-500 align-middle">→</td>
+                <td data-col="result" class="p-1 ${resultColsHiddenClass}"><input type="text" class="result-input" readonly></td>
+                <td data-col="to" class="p-1"><input type="text" class="table-input to-unit" list="to-unit-list-${rowCounter}" placeholder="변환할 단위"></td>
+                <td data-col="m2" class="p-1 area-column ${areaColsHiddenClass}"><input type="text" class="m2-result-input result-input" readonly></td>
+                <td data-col="py" class="p-1 area-column ${areaColsHiddenClass}"><input type="text" class="pyeong-result-input result-input" readonly></td>
+                <td class="p-1 text-center">
+                    <button class="delete-btn h-9 w-9 flex-shrink-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                    </button>
+                </td>
+                <datalist id="from-unit-list-${rowCounter}"></datalist>
+                <datalist id="to-unit-list-${rowCounter}"></datalist>
+            `;
+            
+            if (insertAfterElement) {
+                insertAfterElement.after(tr);
+            } else {
+                elements['conversion-tbody'].appendChild(tr);
+            }
+            return tr;
+        }
+
+        // ===== 자재 정보 로드 =====
+        function populateUnitSuggestions(codeInput) {
+            const row = codeInput.closest('.conversion-row');
+            const fromUnitDatalist = row.querySelector('datalist[id^="from-unit-list-"]');
+            const toUnitDatalist = row.querySelector('datalist[id^="to-unit-list-"]');
+            const descInput = row.querySelector('td[data-col="desc"] .result-input');
+            const code = codeInput.value.trim().toUpperCase();
+            const material = materialsMap.get(code);
+
+            fromUnitDatalist.innerHTML = '';
+            toUnitDatalist.innerHTML = '';
+            descInput.value = '';
+
+            if (material) {
+                descInput.value = material.description || material.name || '';
+                Object.keys(material.units).forEach(unit => {
+                    fromUnitDatalist.innerHTML += `<option value="${unit}">`;
+                    toUnitDatalist.innerHTML += `<option value="${unit}">`;
+                });
+                if (material.units['M2']) {
+                    fromUnitDatalist.innerHTML += `<option value="PYEONG">`;
+                    toUnitDatalist.innerHTML += `<option value="PYEONG">`;
+                }
+            }
+        }
+
+        // ===== 환산 처리 =====
+        function handleConversion() {
+            hideError();
+            const rows = elements['conversion-tbody'].querySelectorAll('.conversion-row');
+            if (rows.length === 0) {
+                showError('환산할 항목을 추가해주세요.');
+                return;
+            }
+
+            if(isFirstConversion) {
+                document.querySelectorAll('.initial-hidden').forEach(el => el.classList.remove('hidden'));
+                isFirstConversion = false;
+            }
+
+            rows.forEach(row => {
+                const code = row.querySelector('.material-code').value.trim().toUpperCase();
+                const quantityStr = row.querySelector('.quantity').value;
+                const quantity = parseFloat(quantityStr);
+                const fromUnit = row.querySelector('.from-unit').value.trim().toUpperCase();
+                const toUnit = row.querySelector('.to-unit').value.trim().toUpperCase();
+                const resultInput = row.querySelector('td[data-col="result"] .result-input');
+                const m2ResultInput = row.querySelector('.m2-result-input');
+                const pyeongResultInput = row.querySelector('.pyeong-result-input');
+                
+                resultInput.value = '';
+                m2ResultInput.value = '';
+                pyeongResultInput.value = '';
+                resultInput.className = 'result-input';
+                m2ResultInput.className = 'm2-result-input result-input';
+                pyeongResultInput.className = 'pyeong-result-input result-input';
+
+                if (!code || !quantityStr || !fromUnit) return;
+                
+                if (isNaN(quantity)) {
+                    resultInput.value = '수량 오류';
+                    resultInput.classList.add('error');
+                    return;
+                }
+                const material = materialsMap.get(code);
+                if (!material) {
+                    resultInput.value = '자재 없음';
+                    resultInput.classList.add('error');
+                    return;
+                }
+                
+                let quantityInBaseUnit;
+                if(fromUnit === 'PYEONG') {
+                    if (material.units['M2']) {
+                        const m2Value = quantity * 3.3058;
+                        quantityInBaseUnit = m2Value / material.units['M2'];
+                    } else {
+                        resultInput.value = '단위 오류';
+                        resultInput.classList.add('warning');
+                        return;
+                    }
+                } else if (material.units[fromUnit]) {
+                    quantityInBaseUnit = quantity / material.units[fromUnit];
+                } else {
+                    resultInput.value = '단위 오류';
+                    resultInput.classList.add('warning');
+                    return;
+                }
+
+                if (toUnit) {
+                    let finalResult = '';
+                    let statusClass = '';
+
+                    if (toUnit === 'PYEONG') {
+                        if (material.units['M2']) {
+                            const m2Value = quantityInBaseUnit * material.units['M2'];
+                            const pyeongValue = m2Value / 3.3058;
+                            finalResult = Math.round(pyeongValue).toLocaleString();
+                            statusClass = 'success';
+                        } else {
+                            finalResult = '단위 오류';
+                            statusClass = 'warning';
+                        }
+                    } else if (material.units[toUnit]) {
+                        const convertedQuantity = quantityInBaseUnit * material.units[toUnit];
+
+                        if (toUnit === 'BDL' && convertedQuantity % 1 !== 0 && material.units['BOX']) {
+                            const boxesPerBdl = material.units['BOX'] / material.units['BDL'];
+                            const epsilon = 1e-9;
+                            const roundedConverted = Math.round(convertedQuantity * (1/epsilon)) / (1/epsilon);
+                             
+                            const integerBDL = Math.floor(roundedConverted);
+                            const decimalBDL = roundedConverted - integerBDL;
+                            const remainingBoxes = Math.round(decimalBDL * boxesPerBdl);
+
+                            if (Math.abs(remainingBoxes - Math.round(boxesPerBdl)) < 1) {
+                                finalResult = (integerBDL + 1).toLocaleString();
+                            } else if (integerBDL > 0 && remainingBoxes > 0) {
+                                finalResult = `${integerBDL.toLocaleString()} BDL + ${remainingBoxes.toLocaleString()} BOX`;
+                            } else if (integerBDL > 0) {
+                                finalResult = `${integerBDL.toLocaleString()} BDL`;
+                            } else if (remainingBoxes > 0) {
+                                finalResult = `${remainingBoxes.toLocaleString()} BOX`;
+                            } else {
+                                finalResult = Math.round(convertedQuantity).toLocaleString();
+                            }
+                        } else {
+                            finalResult = Math.round(convertedQuantity).toLocaleString();
+                        }
+                        statusClass = 'success';
+                    } else {
+                        finalResult = '단위 오류';
+                        statusClass = 'warning';
+                        }
+                    resultInput.value = finalResult;
+                    resultInput.classList.add(statusClass);
+                }
+
+                if (material.units['M2']) {
+                    const m2Value = quantityInBaseUnit * material.units['M2'];
+                    const pyeongValue = m2Value / 3.3058;
+                    m2ResultInput.value = Math.round(m2Value).toLocaleString();
+                    m2ResultInput.classList.add('success');
+                    pyeongResultInput.value = Math.round(pyeongValue).toLocaleString();
+                    pyeongResultInput.classList.add('success');
+                }
+            });
+            adjustColumnWidths();
+        }
+
+        // ===== 컬럼 너비 조정 =====
+        function adjustColumnWidths() {
+            const colWidths = {};
+            const tempSpan = document.createElement('span');
+            tempSpan.style.position = 'absolute';
+            tempSpan.style.visibility = 'hidden';
+            tempSpan.style.whiteSpace = 'nowrap';
+            document.body.appendChild(tempSpan);
+
+            document.getElementById('conversion-table').querySelectorAll('thead th:not(:last-child)').forEach(th => {
+                if(!th.classList.contains('hidden')) {
+                    const span = th.querySelector('span');
+                    const thText = span ? span.textContent : th.textContent.trim() || '→';
+                    tempSpan.style.font = `500 ${window.getComputedStyle(th).fontSize} ${window.getComputedStyle(th).fontFamily}`;
+                    tempSpan.textContent = thText;
+                    colWidths[th.dataset.col] = tempSpan.offsetWidth;
+                }
+            });
+
+            elements['conversion-tbody'].querySelectorAll('tr').forEach(row => {
+                row.querySelectorAll('td').forEach(td => {
+                    const input = td.querySelector('.table-input, .result-input');
+                    const col = td.dataset.col;
+                    if(col && !td.classList.contains('hidden')) {
+                        if (input) {
+                            const style = window.getComputedStyle(input);
+                            tempSpan.style.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+                            tempSpan.textContent = input.value || input.placeholder;
+                        } else {
+                            tempSpan.textContent = td.textContent;
+                        }
+                        const width = tempSpan.offsetWidth;
+                        if (width > (colWidths[col] || 0)) {
+                            colWidths[col] = width;
+                        }
+                    }
+                });
+            });
+            document.body.removeChild(tempSpan);
+
+            for (const col in colWidths) {
+                let padding = (col === 'code' || col === 'desc' ) ? 40 : (col === 'qty' ? 35 : 25);
+                if (col === 'arrow') padding = 10;
+                const newWidth = colWidths[col] + padding;
+                document.getElementById('conversion-table').querySelectorAll(`th[data-col="${col}"], td[data-col="${col}"]`).forEach(el => el.style.width = `${newWidth}px`);
+            }
+        }
+
+        // ===== 면적 컬럼 토글 =====
+        function toggleAreaColumns() {
+            document.querySelectorAll('.area-column').forEach(col => col.classList.toggle('hidden'));
+            elements['area-toggle-btn'].classList.toggle('active');
+            adjustColumnWidths();
+        }
+
+        // ===== 선택 열 복사 =====
+        function handleCopyResults() {
+            const checkedCols = Array.from(document.querySelectorAll('.copy-checkbox:checked')).map(cb => cb.dataset.col);
+            if (checkedCols.length === 0) {
+                showError('복사할 열을 하나 이상 선택해주세요.');
+                return;
+            }
+            hideError();
+
+            const rows = elements['conversion-tbody'].querySelectorAll('.conversion-row');
+            const dataToCopy = Array.from(rows).map(row => {
+                return checkedCols.map(colName => {
+                    const cell = row.querySelector(`td[data-col="${colName}"]`);
+                    if (!cell || cell.classList.contains('hidden')) return '';
+                    const input = cell.querySelector('input');
+                    return input ? input.value.replace(/,/g, '').toUpperCase() : '';
+                }).join('\t');
+            }).join('\n');
+            
+            const textArea = document.createElement("textarea");
+            textArea.value = dataToCopy;
+            textArea.style.position = "fixed";
+            textArea.style.top = "-9999px";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                if (document.execCommand('copy')) {
+                    showToast('클립보드에 복사되었습니다.');
+                }
+            } catch (err) { 
+                console.error('Failed to copy results: ', err); 
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // ===== 붙여넣기 처리 =====
+        function handleTbodyPaste(e) {
+            const targetInput = e.target;
+            if (!targetInput.classList.contains('table-input')) return;
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text').trim();
+            if (!pastedText) return;
+
+            let items = pastedText.split(/\r?\n|\t|\s+/).filter(item => item);
+            if (items.length <= 1) return;
+
+            e.preventDefault();
+            const inputClass = Array.from(targetInput.classList).find(c => ['material-code', 'quantity', 'from-unit', 'to-unit'].includes(c));
+            if (!inputClass) return;
+
+            let currentRow = targetInput.closest('tr');
+            items.forEach((item) => {
+                if (!currentRow) currentRow = createRow();
+                const currentInput = currentRow.querySelector(`.${inputClass}`);
+                if (currentInput) {
+                    currentInput.value = item.trim();
+                    if (inputClass === 'material-code') currentInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                currentRow = currentRow.nextElementSibling;
+            });
+        }
+
+        // ===== 일괄 단위 적용 =====
+        function applyBulkUnit(unitInput, targetClass) {
+            const unitToApply = unitInput.value.trim().toUpperCase();
+            if (!unitToApply) return;
+            elements['conversion-tbody'].querySelectorAll(`.${targetClass}`).forEach(input => {
+                const row = input.closest('.conversion-row');
+                const code = row.querySelector('.material-code').value.trim().toUpperCase();
+                input.classList.remove('!border-red-500');
+                input.title = '';
+
+                if(code) {
+                    const material = materialsMap.get(code);
+                    if(material && (material.units[unitToApply] || (unitToApply === 'PYEONG' && material.units['M2']))) {
+                        input.value = unitToApply;
+                    } else {
+                        input.value = unitToApply;
+                        input.classList.add('!border-red-500');
+                        input.title = '이 자재에는 적용할 수 없는 단위입니다.';
+                    }
+                } else {
+                    input.value = unitToApply;
+                }
+            });
+        }
+
+        // ===== 테마 토글 =====
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcons(isDark);
+        }
+        function updateThemeIcons(isDark) {
+            elements['theme-icon-light'].classList.toggle('hidden', !isDark);
+            elements['theme-icon-dark'].classList.toggle('hidden', isDark);
+        }
+
+        // ===== 가이드 시스템 =====
+        function startGuide() {
+            currentGuideStep = 0;
+            elements['guide-overlay'].classList.remove('hidden');
+            showGuideStep(currentGuideStep);
+        }
+
+        function showGuideStep(stepIndex) {
+            if (stepIndex < 0 || stepIndex >= guideSteps.length) return;
+
+            const step = guideSteps[stepIndex];
+            const targetElement = document.querySelector(step.target);
+
+            if (!targetElement) {
+                console.warn(`가이드 대상을 찾을 수 없습니다: ${step.target}`);
+                return;
+            }
+
+            // 하이라이트 위치 설정
+            const rect = targetElement.getBoundingClientRect();
+            const highlight = elements['guide-highlight'];
+            highlight.style.top = `${rect.top - 8}px`;
+            highlight.style.left = `${rect.left - 8}px`;
+            highlight.style.width = `${rect.width + 16}px`;
+            highlight.style.height = `${rect.height + 16}px`;
+
+            // 툴팁 내용 업데이트
+            elements['guide-title'].textContent = step.title;
+            elements['guide-description'].textContent = step.description;
+            elements['guide-step-num'].textContent = stepIndex + 1;
+            elements['guide-progress'].textContent = `${stepIndex + 1}/${guideSteps.length}`;
+
+            // 툴팁 위치 설정
+            const tooltip = elements['guide-tooltip'];
+            const tooltipRect = tooltip.getBoundingClientRect();
+
+            if (step.position === 'top') {
+                tooltip.style.top = `${rect.top - tooltipRect.height - 20}px`;
+                tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
+            } else if (step.position === 'bottom') {
+                tooltip.style.top = `${rect.bottom + 20}px`;
+                tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
+            } else if (step.position === 'left') {
+                tooltip.style.top = `${rect.top + rect.height / 2 - tooltipRect.height / 2}px`;
+                tooltip.style.left = `${rect.left - tooltipRect.width - 20}px`;
+            } else if (step.position === 'right') {
+                tooltip.style.top = `${rect.top + rect.height / 2 - tooltipRect.height / 2}px`;
+                tooltip.style.left = `${rect.right + 20}px`;
+            }
+
+            // 화면 경계 체크 및 조정
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const tooltipLeft = parseFloat(tooltip.style.left);
+            const tooltipTop = parseFloat(tooltip.style.top);
+
+            if (tooltipLeft < 10) {
+                tooltip.style.left = '10px';
+            } else if (tooltipLeft + tooltipRect.width > viewportWidth - 10) {
+                tooltip.style.left = `${viewportWidth - tooltipRect.width - 10}px`;
+            }
+
+            if (tooltipTop < 10) {
+                tooltip.style.top = '10px';
+            } else if (tooltipTop + tooltipRect.height > viewportHeight - 10) {
+                tooltip.style.top = `${viewportHeight - tooltipRect.height - 10}px`;
+            }
+
+            // 버튼 상태 업데이트
+            elements['guide-prev'].disabled = stepIndex === 0;
+            elements['guide-next'].textContent = stepIndex === guideSteps.length - 1 ? '완료' : '다음';
+
+            // 스크롤 조정
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function nextGuideStep() {
+            if (currentGuideStep < guideSteps.length - 1) {
+                currentGuideStep++;
+                showGuideStep(currentGuideStep);
+            } else {
+                closeGuide();
+            }
+        }
+
+        function prevGuideStep() {
+            if (currentGuideStep > 0) {
+                currentGuideStep--;
+                showGuideStep(currentGuideStep);
+            }
+        }
+
+        function closeGuide() {
+            elements['guide-overlay'].classList.add('hidden');
+            currentGuideStep = 0;
+        }
+
+        // ===== 초기화 =====
+        function initialize() {
+            loadDatabase();
+            
+            // 행 추가
+            elements['add-row-btn'].addEventListener('click', () => {
+                const newRow = createRow();
+                newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                newRow.querySelector('.material-code').focus();
+            });
+
+            // 환산 및 복사
+            elements['convert-btn'].addEventListener('click', handleConversion);
+            elements['copy-btn'].addEventListener('click', handleCopyResults);
+
+            // 면적 토글
+            elements['area-toggle-btn'].addEventListener('click', toggleAreaColumns);
+
+            // 일괄 적용
+            elements['bulk-apply-from-btn'].addEventListener('click', () => applyBulkUnit(elements['bulk-from-unit'], 'from-unit'));
+            elements['bulk-apply-to-btn'].addEventListener('click', () => applyBulkUnit(elements['bulk-to-unit'], 'to-unit'));
+
+            // 테마
+            elements['theme-toggle'].addEventListener('click', toggleTheme);
+
+            // 가이드
+            elements['guide-btn'].addEventListener('click', startGuide);
+            elements['guide-next'].addEventListener('click', nextGuideStep);
+            elements['guide-prev'].addEventListener('click', prevGuideStep);
+            elements['guide-skip'].addEventListener('click', closeGuide);
+            elements['guide-close'].addEventListener('click', closeGuide);
+
+            // Tbody 이벤트
+            elements['conversion-tbody'].addEventListener('input', e => {
+                if (e.target.classList.contains('material-code')) {
+                    populateUnitSuggestions(e.target);
+                } else if (e.target.classList.contains('from-unit') || e.target.classList.contains('to-unit')) {
+                    e.target.classList.remove('!border-red-500');
+                    e.target.title = '';
+                }
+            });
+
+            elements['conversion-tbody'].addEventListener('click', e => {
+                const deleteBtn = e.target.closest('.delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.closest('.conversion-row').remove();
+                }
+                const insertBtn = e.target.closest('.insert-row-btn');
+                if (insertBtn) {
+                    const currentRow = insertBtn.closest('.conversion-row');
+                    const newRow = createRow(currentRow);
+                    newRow.querySelector('.material-code').focus();
+                }
+            });
+
+            // ===== 방향키 네비게이션 =====
+            elements['conversion-tbody'].addEventListener('keydown', (e) => {
+                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return;
+                
+                const target = e.target;
+                if (!target.classList.contains('table-input')) return;
+                
+                const allInputs = Array.from(target.closest('tr').querySelectorAll('.table-input:not([readonly])'));
+                const currentIndex = allInputs.indexOf(target);
+                const currentRow = target.closest('.conversion-row');
+                const allRows = Array.from(elements['conversion-tbody'].querySelectorAll('.conversion-row'));
+                const rowIndex = allRows.indexOf(currentRow);
+                
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const newRow = createRow(currentRow);
+                    newRow.querySelector('.material-code').focus();
+                } else if (e.key === 'ArrowUp' && rowIndex > 0) {
+                    e.preventDefault();
+                    allRows[rowIndex - 1].querySelectorAll('.table-input')[currentIndex]?.focus();
+                } else if (e.key === 'ArrowDown' && rowIndex < allRows.length - 1) {
+                    e.preventDefault();
+                    allRows[rowIndex + 1].querySelectorAll('.table-input')[currentIndex]?.focus();
+                } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+                    e.preventDefault();
+                    allInputs[currentIndex - 1].focus();
+                } else if (e.key === 'ArrowRight' && currentIndex < allInputs.length - 1) {
+                    e.preventDefault();
+                    allInputs[currentIndex + 1].focus();
+                }
+            });
+
+            elements['conversion-tbody'].addEventListener('paste', handleTbodyPaste);
+
+            // Datalist 포커스 처리
+            document.body.addEventListener('focusin', e => {
+                const target = e.target;
+                if(target.hasAttribute('list')){
+                    target.dataset.originalValue = target.value;
+                    target.value = '';
+                }
+            });
+            document.body.addEventListener('focusout', e => {
+                const target = e.target;
+                if(target.hasAttribute('list') && !target.value){
+                    target.value = target.dataset.originalValue || '';
+                }
+            });
+
+            // 테마 초기화
+            const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+            updateThemeIcons(savedTheme === 'dark');
+        }
+
+        // ===== 앱 시작 =====
+        initialize();
+    </script>
+</body>
+</html>
